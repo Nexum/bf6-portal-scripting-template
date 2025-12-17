@@ -1,0 +1,38 @@
+{
+    "name": "bf6-portal-scripting-template",
+    "version": "1.0.0",
+    "description": "Scripting template for Battlefield 6 Portal",
+    "engines": {
+        "node": ">=23.0.0"
+    },
+    "scripts": {
+        "build": "bf6-portal-bundler --entrypoint ./src/index.ts --outDir ./dist",
+        "lint": "eslint .",
+        "lint:fix": "eslint . --fix",
+        "prettier": "prettier --write ./src/**/*.ts ./src/*.ts"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/deluca-mike/bf6-portal-scripting-template.git"
+    },
+    "author": "Michael De Luca",
+    "bugs": {
+        "url": "https://github.com/deluca-mike/bf6-portal-scripting-template/issues"
+    },
+    "homepage": "https://github.com/deluca-mike/bf6-portal-scripting-template#readme",
+    "devDependencies": {
+        "@types/node": "^24.10.2",
+        "@typescript-eslint/eslint-plugin": "^8.50.0",
+        "@typescript-eslint/parser": "^8.50.0",
+        "bf6-portal-bundler": "^1.1.0",
+        "bf6-portal-mod-types": "^1.1.3",
+        "bf6-portal-utils": "^2.0.0",
+        "eslint": "^9.39.1",
+        "eslint-config-prettier": "^10.1.8",
+        "eslint-plugin-prettier": "^5.5.4",
+        "prettier": "^3.7.4",
+        "ts-node": "^10.9.2",
+        "typescript": "^5.9.3",
+        "typescript-eslint": "^8.50.0"
+    }
+}
