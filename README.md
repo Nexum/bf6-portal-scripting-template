@@ -15,6 +15,8 @@ This template is a starting point for building custom game modes, experiences, a
 - ✅ Helper utilities for common Portal tasks
 - ✅ All Portal event handlers pre-wired
 - ✅ Working examples you can learn from
+- ✅ Thumbnail image export tool (resizes/crops to Portal requirements)
+- ✅ Spatial JSON minification tool (reduces file sizes by 50-80%)
 
 ## Prerequisites
 
@@ -88,6 +90,50 @@ This creates two files in the `dist/` folder:
 6. Click "Import Files".
 7. Save and test your experience!
 
+### 6. Export Assets (Optional)
+
+#### Thumbnail Image
+
+If you want to add a custom thumbnail for your experience:
+
+1. Place your thumbnail image in `./src/` with one of these names:
+   - `thumbnail.png`
+   - `thumbnail.jpeg` or `thumbnail.jpg`
+   - `thumbnail.gif`
+   - `thumbnail.bmp`
+
+2. Run the export command:
+   ```bash
+   npm run export-thumbnail
+   ```
+
+3. The script will automatically:
+   - Resize and/or crop your image to **352x248 pixels** (Portal's required dimensions)
+   - Compress it to meet the **78KB size limit**
+   - Save the optimized thumbnail to `./dist/thumbnail.png` or `./dist/thumbnail.jpg`
+
+4. Upload `dist/thumbnail.png` or `dist/thumbnail.jpg` to Portal in the Experience Editor's thumbnail section.
+
+#### Spatial JSON Files
+
+If you're using Portal's Spatial Editor to create custom maps or modify existing ones:
+
+1. Place all your spatial JSON files in the `./spatials/` directory.
+
+2. Run the minification command:
+   ```bash
+   npm run minify-spatials
+   ```
+
+3. The script will process all JSON files in `./spatials/` and:
+   - **Replace long names and IDs** with short identifiers (e.g., "a", "b", "c") to reduce file size
+   - **Eliminate whitespace** to reduce wasted file size
+   - **Reduce numeric precision** to 6 decimal places (configurable) to further compress the files
+   - **Preserve important structural elements** like "Static/" paths and critical asset names
+   - Save the minified versions to `./dist/spatials/`
+
+4. Upload the minified files from `./dist/spatials/` to Portal. The minification process typically reduces file sizes by 50-80%, making it easier to meet file size limits.
+
 ## Project Structure
 
 Understanding the folder structure will help you navigate and customize the template:
@@ -103,10 +149,16 @@ bf-portal-scripting-template/
 │   │   └── index.ts
 │   ├── modlib/                  # Official Portal helper library
 │   │   └── index.ts
-│   └── strings.json             # Text strings for your experience
+│   ├── strings.json             # Text strings for your experience
+│   └── thumbnail.png            # Optional: Experience thumbnail (png/jpeg/gif/bmp)
+├── spatials/                    # Optional: Spatial Editor JSON files
+│   └── *.json                   # Place exported spatial JSON files here
 ├── dist/                        # Build output (generated)
 │   ├── bundle.ts                # Upload this to Portal
-│   └── bundle.strings.json      # Upload this to Portal
+│   ├── bundle.strings.json      # Upload this to Portal
+│   ├── thumbnail.png            # Optional: Processed thumbnail (or .jpg)
+│   └── spatials/                # Optional: Minified spatial JSON files
+│       └── *.json               # Upload these to Portal
 ├── node_modules/                # Dependencies (auto-generated)
 ├── package.json                 # Project configuration
 ├── tsconfig.json                # TypeScript configuration
@@ -355,6 +407,12 @@ import { yourFunction } from './your-module';
 # Build your experience (creates dist/bundle.ts and dist/bundle.strings.json)
 npm run build
 
+# Export and optimize thumbnail image (creates dist/thumbnail.png or .jpg)
+npm run export-thumbnail
+
+# Minify all spatial JSON files (creates dist/spatials/*.json)
+npm run minify-spatials
+
 # Check code for errors
 npm run lint
 
@@ -433,7 +491,7 @@ const button = new UI.Button(
 ```typescript
 export async function OnPlayerDeployed(player: mod.Player): Promise<void> {
     // Wait until player is jumping
-    while (!mod.GetSoldierState(player, mod.SoldierStateBool.isJumping)) {
+    while (!mod.GetSoldierState(player, mod.SoldierStateBool.IsJumping)) {
         await mod.Wait(0.1);
     }
 
@@ -451,8 +509,8 @@ export async function OnPlayerDeployed(player: mod.Player): Promise<void> {
 ### Portal Errors
 
 - **Code not running**
-    - First, check that all your `mod.Message` usages use only strings that exist in your `strings.json`. Portal tends to completely die as soonas you try to create a `mod.Message` with a string not defined this way.
-    - Next, if you are on PC, check the lof file for errors. It should be at `C:\Users\username\AppData\Local\Temp\Battlefieldâ„¢ 6\PortalLog.txt`
+    - First, check that all your `mod.Message` calls use only strings that exist in your `strings.json`. Portal scripts tend to stop in their tracks as soon as you try to create a `mod.Message` with a string not defined this way.
+    - Next, if you are on PC, check the log file for errors. It should be at `C:\Users\username\AppData\Local\Temp\Battlefieldâ„¢ 6\PortalLog.txt`
     - Now, some common issues:
         - Syntax errors
         - Calling `mod` functions incorrectly
@@ -460,7 +518,7 @@ export async function OnPlayerDeployed(player: mod.Player): Promise<void> {
 
 ### Performance Issues
 
-- **Game lagging** - Check your `Ongoing*` functions. They run 30 times per second, so keep them fast!
+- **Game lagging** - Check your `Ongoing*` functions. They run 30 times per second, so keep them fast! Even better, consider coding your experience in a way that relies only on "one-time" events (i.e. not the `Ongoing*` ones).
 
 ## Learning Resources
 
@@ -474,10 +532,11 @@ All Portal types are defined in `bf6-portal-mod-types`. You can explore them in:
 
 Each utility module has detailed documentation:
 
-- **UI Module**: `node_modules/bf6-portal-utils/ui/README.md`
-- **Logger Module**: `node_modules/bf6-portal-utils/logger/README.md`
-- **Map Detector**: `node_modules/bf6-portal-utils/map-detector/README.md`
-- **Interact Detector**: `node_modules/bf6-portal-utils/interact-multi-click-detector/README.md`
+- **UI Module**: [bf6-portal-utils/ui](https://github.com/deluca-mike/bf6-portal-utils/tree/master/ui)
+- **Logger Module**: [bf6-portal-utils/logger](https://github.com/deluca-mike/bf6-portal-utils/tree/master/logger)
+- **Map Detector**: [bf6-portal-utils/map-detector](https://github.com/deluca-mike/bf6-portal-utils/tree/master/map-detector)
+- **Interact Multi-Click Detector**: [bf6-portal-utils/interact-multi-click-detector](https://github.com/deluca-mike/bf6-portal-utils/tree/master/interact-multi-click-detector)
+- **Bundler**: [bf6-portal-bundler](https://github.com/deluca-mike/bf6-portal-bundler)
 
 ### Portal Official Resources
 
@@ -504,6 +563,10 @@ If you don't need the debug tool, you can remove it:
     import { DebugTool } from './debug-tool';
     ```
 3. Remove all `adminDebugTool` references in `src/index.ts`
+
+## License
+
+This project is licensed under the MIT License. See the `LICENSE` file for details.
 
 ## Contributing
 

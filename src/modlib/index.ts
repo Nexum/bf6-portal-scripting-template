@@ -720,6 +720,6 @@ export function ClearCustomNotificationMessage(custom: mod.CustomNotificationSlo
             }
         }
     } catch {
-        console.error('Could not clear custom message for specified target(s)');
+        console.log('<MODLIB> Could not clear custom message for specified target(s)');
     }
 }

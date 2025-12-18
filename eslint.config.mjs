@@ -2,7 +2,7 @@ import eslint from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import prettierConfig from 'eslint-config-prettier';
 
-export default tseslint.config(
+export default [
     eslint.configs.recommended,
     ...tseslint.configs.recommended,
     prettierConfig,
@@ -11,12 +11,13 @@ export default tseslint.config(
         languageOptions: {
             parser: tseslint.parser,
             parserOptions: {
-                ecmaVersion: 2020,
+                ecmaVersion: 2022,
                 sourceType: 'module',
                 project: './tsconfig.json',
             },
         },
         rules: {
+            '@typescript-eslint/no-namespace': 'off', // Allow namespaces
             '@typescript-eslint/no-explicit-any': 'warn',
             '@typescript-eslint/no-unused-vars': [
                 'warn',
@@ -31,6 +32,17 @@ export default tseslint.config(
         },
     },
     {
-        ignores: ['dist/**', 'node_modules/**'],
+        files: ['**/*.js'],
+        languageOptions: {
+            ecmaVersion: 2022,
+            sourceType: 'module',
+            globals: {
+                console: 'readonly',
+                process: 'readonly',
+            },
+        },
+    },
+    {
+        ignores: ['node_modules/**', 'src/modlib/**', 'dist/**'],
     }
-);
+];
