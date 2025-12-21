@@ -1,0 +1,28 @@
+{
+    "vipFiesta": {
+        "ui": {
+            "teamScore": "Team {}: {}",
+            "vipMarker": "VIP",
+            "scoreboardTitle": "VIP FIESTA"
+        },
+        "notifications": {
+            "youAreVip": "You are the VIP! Stay alive!",
+            "newVip": "{} is the new VIP!",
+            "vipKilled": "VIP eliminated! Team {} +1 point ({}/20)",
+            "teamWins": "Team {} wins!",
+            "selectingNewVip": "Selecting new VIP...",
+            "gameStarting": "VIP Fiesta starting! Hunt the enemy VIPs!",
+            "vipDied": "Your VIP has been killed!"
+        },
+        "teams": {
+            "team1": "Team 1",
+            "team2": "Team 2",
+            "team3": "Team 3",
+            "team4": "Team 4",
+            "team5": "Team 5",
+            "team6": "Team 6",
+            "team7": "Team 7",
+            "team8": "Team 8"
+        }
+    }
+}

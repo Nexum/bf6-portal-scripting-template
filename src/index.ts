@@ -4,8 +4,10 @@ import { MapDetector } from 'bf6-portal-utils/map-detector/index.ts';
 
 import { DebugTool } from './debug-tool/index.ts';
 import { getPlayerStateVectorString, getVectorString } from './helpers/index.ts';
+import { VIPFiesta } from './vip-fiesta/index.ts';
 
 let adminDebugTool: DebugTool | undefined;
+let vipFiesta: VIPFiesta | undefined;
 
 // This will trigger every sever tick.
 export function OngoingGlobal(): void {
@@ -50,6 +52,9 @@ export function OngoingMCOM(eventMCOM: mod.MCOM): void {
 // This will trigger every sever tick, for each Player.
 export function OngoingPlayer(eventPlayer: mod.Player): void {
     // Do something minimal every tick. Remember, this gets called 30 times per second.
+
+    // VIP Fiesta: maintain VIP spotting
+    vipFiesta?.ongoingPlayer(eventPlayer);
 
     // The admin player is player id 0 for non-persistent test servers,
     // so don't do the rest of this unless it's the admin player.
@@ -168,6 +173,10 @@ export function OnGameModeEnding(): void {
 // This will trigger at the start of the gamemode.
 export function OnGameModeStarted(): void {
     adminDebugTool?.dynamicLog(`Game mode started.`);
+
+    // Initialize VIP Fiesta game mode
+    vipFiesta = new VIPFiesta();
+    vipFiesta.initialize();
 }
 
 // This will trigger when a Player is forced into the mandown state.
@@ -224,6 +233,9 @@ export function OnPlayerDeployed(eventPlayer: mod.Player): void {
 
     adminDebugTool?.dynamicLog(`Player ${mod.GetObjId(eventPlayer)} deployed.`);
 
+    // VIP Fiesta: handle player deploy
+    vipFiesta?.onPlayerDeployed(eventPlayer);
+
     // The admin player is player id 0 for non-persistent test servers,
     // so don't do the rest of this unless it's the admin player.
     if (mod.GetObjId(eventPlayer) != 0) return;
@@ -239,6 +251,9 @@ export function OnPlayerDied(
     eventWeaponUnlock: mod.WeaponUnlock // The weapon that killed the player who died.
 ): void {
     adminDebugTool?.dynamicLog(`Player ${mod.GetObjId(eventOtherPlayer)} killed player ${mod.GetObjId(eventPlayer)}.`);
+
+    // VIP Fiesta: check if VIP was killed
+    vipFiesta?.onPlayerDied(eventPlayer, eventOtherPlayer);
 }
 
 // This will trigger when a Player earns a kill against another Player.
@@ -335,6 +350,9 @@ export function OnPlayerInteract(eventPlayer: mod.Player, eventInteractPoint: mo
 export function OnPlayerJoinGame(eventPlayer: mod.Player): void {
     adminDebugTool?.dynamicLog(`Player ${mod.GetObjId(eventPlayer)} joined the game.`);
 
+    // VIP Fiesta: handle player join
+    vipFiesta?.onPlayerJoinGame(eventPlayer);
+
     // The admin player is player id 0 for non-persistent test servers,
     // so don't do the rest of this unless it's the admin player.
     if (mod.GetObjId(eventPlayer) != 0) return;
@@ -345,11 +363,17 @@ export function OnPlayerJoinGame(eventPlayer: mod.Player): void {
 // This will trigger when any player leaves the game.
 export function OnPlayerLeaveGame(eventNumber: number): void {
     adminDebugTool?.dynamicLog(`A player left the game (event number: ${eventNumber}).`);
+
+    // VIP Fiesta: handle player leave
+    vipFiesta?.onPlayerLeaveGame(eventNumber);
 }
 
 // This will trigger when a Player changes team.
 export function OnPlayerSwitchTeam(eventPlayer: mod.Player, eventTeam: mod.Team): void {
     adminDebugTool?.dynamicLog(`Player ${mod.GetObjId(eventPlayer)} switched to team ${mod.GetObjId(eventTeam)}.`);
+
+    // VIP Fiesta: handle team switch
+    vipFiesta?.onPlayerSwitchTeam(eventPlayer, eventTeam);
 }
 
 // This will trigger when a Player interacts with an UI button.
@@ -401,6 +425,9 @@ export function OnSpawnerSpawned(eventPlayer: mod.Player, eventSpawner: mod.Spaw
 // This will trigger when the gamemode time limit has been reached.
 export function OnTimeLimitReached(): void {
     adminDebugTool?.dynamicLog(`The time limit has been reached.`);
+
+    // VIP Fiesta: end game when time runs out
+    vipFiesta?.onTimeLimitReached();
 }
 
 // This will trigger when a Vehicle is destroyed.
