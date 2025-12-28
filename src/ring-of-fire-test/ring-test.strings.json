@@ -1,0 +1,8 @@
+{
+    "ringtest": {
+        "initialized": "ROF Test: Ring gefunden, Test gestartet",
+        "error": "ROF Test: Ring nicht gefunden!",
+        "moved": "ROF Test: Ring bewegt",
+        "moveFailed": "ROF Test: Bewegung fehlgeschlagen!"
+    }
+}

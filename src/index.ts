@@ -5,6 +5,7 @@ import { MapDetector } from 'bf6-portal-utils/map-detector/index.ts';
 import { DebugTool } from './debug-tool/index.ts';
 import { getPlayerStateVectorString, getVectorString } from './helpers/index.ts';
 import { VIPFiesta } from './vip-fiesta/index.ts';
+import { initRingOfFireTest, updateRingOfFireTest } from './ring-of-fire-test/index.ts';
 
 let adminDebugTool: DebugTool | undefined;
 let vipFiesta: VIPFiesta | undefined;
@@ -12,6 +13,7 @@ let vipFiesta: VIPFiesta | undefined;
 // This will trigger every sever tick.
 export function OngoingGlobal(): void {
     // Do something minimal every tick. Remember, this gets called 30 times per second.
+    updateRingOfFireTest();
 }
 
 // This will trigger every sever tick, for each AreaTrigger.
@@ -177,6 +179,9 @@ export function OnGameModeStarted(): void {
     // Initialize VIP Fiesta game mode
     vipFiesta = new VIPFiesta();
     vipFiesta.initialize();
+
+    // Initialize Ring of Fire movement test
+    initRingOfFireTest();
 }
 
 // This will trigger when a Player is forced into the mandown state.
