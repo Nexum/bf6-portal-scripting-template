@@ -1,4 +1,4 @@
-import { CONFIG } from './state.ts';
+import { getConfig } from './state.ts';
 import type { VIPFiestaState } from './state.ts';
 
 // Generate team colors programmatically for up to CONFIG.TEAM_COUNT teams
@@ -20,7 +20,7 @@ function generateTeamColors(): mod.Vector[] {
     colors.push(...predefinedColors);
 
     // Generate additional colors using HSV-like distribution
-    for (let i = 8; i < CONFIG.TEAM_COUNT; i++) {
+    for (let i = 8; i < getConfig().teamCount; i++) {
         const hue = (i * 137.5) % 360; // Golden angle approximation for good distribution
         const saturation = 0.7 + (i % 3) * 0.1; // Vary saturation slightly
         const value = 0.8 + (i % 2) * 0.2; // Vary brightness
@@ -46,50 +46,21 @@ function generateTeamColors(): mod.Vector[] {
 
 const TEAM_COLORS: mod.Vector[] = generateTeamColors();
 
-// Widget names for each team score
-function getScoreWidgetName(teamId: number): string {
-    return `vipfiesta_score_team_${teamId}`;
-}
-
 const CONTAINER_NAME = 'vipfiesta_scoreboard';
-const WIDGET_WIDTH = 145;
-const WIDGET_HEIGHT = 28;
-const WIDGET_SPACING = 10;
-const ROW_HEIGHT = 32;
+const BAR_BG_PREFIX = 'vipfiesta_bar_bg_';
+const BAR_FILL_PREFIX = 'vipfiesta_bar_fill_';
+const LABEL_PREFIX = 'vipfiesta_bar_label_';
+// Row height not needed with simple vertical layout
+const BAR_WIDTH = 300;
+const BAR_HEIGHT = 18;
+const BAR_SPACING_Y = 8;
 
 export class VIPFiestaScoreUI {
     private initialized = false;
     private currentActiveTeams: number[] = [];
+    private headerName = 'vipfiesta_score_header';
 
-    // Calculate position for a team widget based on its index in active teams
-    private calculateWidgetPosition(displayIndex: number, totalActiveTeams: number): { x: number; y: number } {
-        const teamsPerRow = 6; // Show up to 6 teams per row for better fit
-        if (totalActiveTeams <= teamsPerRow) {
-            // Single row, center-aligned
-            const totalWidth = totalActiveTeams * (WIDGET_WIDTH + WIDGET_SPACING) - WIDGET_SPACING;
-            const containerWidth = 640;
-            const startX = (containerWidth - totalWidth) / 2;
-            return {
-                x: startX + displayIndex * (WIDGET_WIDTH + WIDGET_SPACING),
-                y: 5,
-            };
-        } else {
-            // Multiple rows
-            const col = displayIndex % teamsPerRow;
-            const row = Math.floor(displayIndex / teamsPerRow);
-            return {
-                x: col * (WIDGET_WIDTH + WIDGET_SPACING) + WIDGET_SPACING,
-                y: row * ROW_HEIGHT + 5,
-            };
-        }
-    }
-
-    // Calculate container height based on active teams
-    private calculateContainerHeight(activeTeamCount: number): number {
-        const teamsPerRow = 6;
-        const rows = Math.ceil(activeTeamCount / teamsPerRow);
-        return rows * ROW_HEIGHT + 8; // Add some padding
-    }
+    // Layout is simple vertical list; positioning handled directly per row
 
     // Initialize the scoreboard UI for all players
     public initialize(): void {
@@ -99,7 +70,7 @@ export class VIPFiestaScoreUI {
         mod.AddUIContainer(
             CONTAINER_NAME,
             mod.CreateVector(0, 10, 0), // Position: top center with small margin
-            mod.CreateVector(640, 70, 0), // Size: initial size, will be resized based on active teams
+            mod.CreateVector(640, 90, 0), // Size: initial size, will be resized based on active teams
             mod.UIAnchor.TopCenter,
             mod.GetUIRoot(),
             true, // visible
@@ -111,28 +82,82 @@ export class VIPFiestaScoreUI {
 
         const container = mod.FindUIWidgetWithName(CONTAINER_NAME);
 
-        // Create all team widgets (HIDDEN by default - position set dynamically)
-        for (let teamId = 1; teamId <= CONFIG.TEAM_COUNT; teamId++) {
+        // Create row widgets per team (hidden by default)
+        for (let teamId = 1; teamId <= getConfig().teamCount; teamId++) {
             const teamColor = TEAM_COLORS[teamId - 1] ?? mod.CreateVector(1, 1, 1);
 
-            mod.AddUIText(
-                getScoreWidgetName(teamId),
-                mod.CreateVector(0, 0, 0), // Position set dynamically in updateActiveTeams
-                mod.CreateVector(WIDGET_WIDTH, WIDGET_HEIGHT, 0),
+            // Background bar
+            mod.AddUIImage(
+                BAR_BG_PREFIX + teamId,
+                mod.CreateVector(0, 0, 0),
+                mod.CreateVector(BAR_WIDTH, BAR_HEIGHT, 0),
                 mod.UIAnchor.TopLeft,
                 container,
-                false, // HIDDEN by default
-                4, // padding
-                teamColor, // bgColor: team color
-                0.3, // bgAlpha: subtle background
+                false,
+                2,
+                mod.CreateVector(0.15, 0.15, 0.15),
+                0.5,
                 mod.UIBgFill.Solid,
+                mod.UIImageType.None,
+                mod.CreateVector(0, 0, 0),
+                0.0
+            );
+
+            // Fill bar
+            mod.AddUIImage(
+                BAR_FILL_PREFIX + teamId,
+                mod.CreateVector(0, 0, 0),
+                mod.CreateVector(0, BAR_HEIGHT, 0),
+                mod.UIAnchor.TopLeft,
+                container,
+                false,
+                0,
+                mod.CreateVector(0, 0, 0),
+                0.0,
+                mod.UIBgFill.None,
+                mod.UIImageType.None,
+                teamColor,
+                1.0
+            );
+
+            // Label
+            mod.AddUIText(
+                LABEL_PREFIX + teamId,
+                mod.CreateVector(0, 0, 0),
+                mod.CreateVector(640, BAR_HEIGHT, 0),
+                mod.UIAnchor.TopLeft,
+                container,
+                false,
+                0,
+                mod.CreateVector(0, 0, 0),
+                0.0,
+                mod.UIBgFill.None,
                 mod.Message(mod.stringkeys.vipFiesta.ui.teamScore, teamId, 0),
-                18, // textSize
-                mod.CreateVector(1, 1, 1), // textColor: white
-                1, // textAlpha
-                mod.UIAnchor.Center
+                18,
+                mod.CreateVector(1, 1, 1),
+                1,
+                mod.UIAnchor.CenterLeft
             );
         }
+
+        // Header showing target kills
+        mod.AddUIText(
+            this.headerName,
+            mod.CreateVector(10, 0, 0),
+            mod.CreateVector(640, 20, 0),
+            mod.UIAnchor.TopLeft,
+            container,
+            true,
+            0,
+            mod.CreateVector(0, 0, 0),
+            0.0,
+            mod.UIBgFill.None,
+            mod.Message(mod.stringkeys.vipFiesta.ui.targetHeader, getConfig().targetVipKills),
+            18,
+            mod.CreateVector(1, 1, 1),
+            1,
+            mod.UIAnchor.TopLeft
+        );
 
         this.initialized = true;
     }
@@ -149,37 +174,73 @@ export class VIPFiestaScoreUI {
             }))
             .sort((a, b) => b.score - a.score);
 
-        // Select top 5 teams
-        const topTeams = sortedTeams.slice(0, 5);
+        // Select top 3 teams; ensure player's team is included
+        const topTeams = sortedTeams.slice(0, 3);
+        const localPlayers = mod.AllPlayers();
+        const localCount = mod.CountOf(localPlayers);
+        let localTeamId = topTeams[0]?.teamId ?? 1;
+        if (localCount > 0) {
+            const p = mod.ValueInArray(localPlayers, 0) as mod.Player; // assume local client first for visibility
+            localTeamId = mod.GetObjId(mod.GetTeam(p));
+        }
+        if (!topTeams.some(t => t.teamId === localTeamId)) {
+            const localScore = state.teamScores.get(localTeamId) ?? 0;
+            topTeams.push({ teamId: localTeamId, score: localScore });
+        }
 
-        // Hide all team widgets first
-        for (let teamId = 1; teamId <= CONFIG.TEAM_COUNT; teamId++) {
-            const widget = mod.FindUIWidgetWithName(getScoreWidgetName(teamId));
-            if (widget) {
-                mod.SetUIWidgetVisible(widget, false);
-            }
+        // Hide all row widgets first
+        for (let teamId = 1; teamId <= getConfig().teamCount; teamId++) {
+            const bg = mod.FindUIWidgetWithName(BAR_BG_PREFIX + teamId);
+            const fill = mod.FindUIWidgetWithName(BAR_FILL_PREFIX + teamId);
+            const label = mod.FindUIWidgetWithName(LABEL_PREFIX + teamId);
+            if (bg) mod.SetUIWidgetVisible(bg, false);
+            if (fill) mod.SetUIWidgetVisible(fill, false);
+            if (label) mod.SetUIWidgetVisible(label, false);
         }
 
         // Resize container based on teams to show count
         const container = mod.FindUIWidgetWithName(CONTAINER_NAME);
         if (container) {
-            const newHeight = this.calculateContainerHeight(topTeams.length);
-            mod.SetUIWidgetSize(container, mod.CreateVector(640, newHeight, 0));
+            const totalHeight = topTeams.length * (BAR_HEIGHT + BAR_SPACING_Y) + 20;
+            mod.SetUIWidgetSize(container, mod.CreateVector(640, totalHeight, 0));
         }
 
         // Show and reposition selected team widgets
         topTeams.forEach((teamInfo, displayIndex) => {
-            const widget = mod.FindUIWidgetWithName(getScoreWidgetName(teamInfo.teamId));
-            if (widget) {
-                const pos = this.calculateWidgetPosition(displayIndex, topTeams.length);
-                mod.SetUIWidgetPosition(widget, mod.CreateVector(pos.x, pos.y, 0));
-                mod.SetUIWidgetVisible(widget, true);
+            const y = displayIndex * (BAR_HEIGHT + BAR_SPACING_Y) + 8;
+            const bg = mod.FindUIWidgetWithName(BAR_BG_PREFIX + teamInfo.teamId);
+            const fill = mod.FindUIWidgetWithName(BAR_FILL_PREFIX + teamInfo.teamId);
+            const label = mod.FindUIWidgetWithName(LABEL_PREFIX + teamInfo.teamId);
 
-                // Update the text to show rank instead of team ID
-                const score = teamInfo.score;
-                mod.SetUITextLabel(widget, mod.Message(mod.stringkeys.vipFiesta.ui.teamScore, displayIndex + 1, score));
+            const ratio = Math.max(0, Math.min(1, teamInfo.score / getConfig().targetVipKills));
+            const fillWidth = Math.floor(BAR_WIDTH * ratio);
+
+            if (bg) {
+                mod.SetUIWidgetPosition(bg, mod.CreateVector(170, y, 0));
+                mod.SetUIWidgetVisible(bg, true);
+            }
+            if (fill) {
+                mod.SetUIWidgetPosition(fill, mod.CreateVector(170, y, 0));
+                mod.SetUIWidgetSize(fill, mod.CreateVector(fillWidth, BAR_HEIGHT, 0));
+                mod.SetUIWidgetVisible(fill, true);
+            }
+            if (label) {
+                const teamLabel = mod.Message(
+                    mod.stringkeys.vipFiesta.ui.teamScore,
+                    teamInfo.teamId,
+                    teamInfo.score
+                );
+                mod.SetUIWidgetPosition(label, mod.CreateVector(10, y - 2, 0));
+                mod.SetUITextLabel(label, teamLabel);
+                mod.SetUIWidgetVisible(label, true);
             }
         });
+
+        // Update header target dynamically
+        const header = mod.FindUIWidgetWithName(this.headerName);
+        if (header) {
+            mod.SetUITextLabel(header, mod.Message(mod.stringkeys.vipFiesta.ui.targetHeader, getConfig().targetVipKills));
+        }
 
         this.currentActiveTeams = topTeams.map(t => t.teamId);
     }
@@ -203,12 +264,11 @@ export class VIPFiestaScoreUI {
         if (!this.initialized) return;
         if (!this.currentActiveTeams.includes(teamId)) return;
 
-        const widget = mod.FindUIWidgetWithName(getScoreWidgetName(teamId));
-        if (widget) {
-            // Set brighter background to highlight the winning team
+        const fill = mod.FindUIWidgetWithName(BAR_FILL_PREFIX + teamId);
+        if (fill) {
             const teamColor = TEAM_COLORS[teamId - 1] ?? mod.CreateVector(1, 1, 1);
-            mod.SetUIWidgetBgColor(widget, teamColor);
-            mod.SetUIWidgetBgAlpha(widget, 0.8);
+            // brighten by raising alpha via label/background
+            mod.SetUIImageColor(fill, teamColor);
         }
     }
 
@@ -235,11 +295,13 @@ export class VIPFiestaScoreUI {
         if (!this.initialized) return;
 
         // Delete team score widgets
-        for (let teamId = 1; teamId <= CONFIG.TEAM_COUNT; teamId++) {
-            const widget = mod.FindUIWidgetWithName(getScoreWidgetName(teamId));
-            if (widget) {
-                mod.DeleteUIWidget(widget);
-            }
+        for (let teamId = 1; teamId <= getConfig().teamCount; teamId++) {
+            const bg = mod.FindUIWidgetWithName(BAR_BG_PREFIX + teamId);
+            const fill = mod.FindUIWidgetWithName(BAR_FILL_PREFIX + teamId);
+            const label = mod.FindUIWidgetWithName(LABEL_PREFIX + teamId);
+            if (bg) mod.DeleteUIWidget(bg);
+            if (fill) mod.DeleteUIWidget(fill);
+            if (label) mod.DeleteUIWidget(label);
         }
 
         // Delete container

@@ -1,10 +1,14 @@
+import type { VIPFiestaState } from './state.ts';
 import {
-    VIPFiestaState,
-    CONFIG,
+    getConfig,
     createInitialState,
     getWinningTeamId,
     calculateActiveTeamIds,
     activeTeamsChanged,
+    incrementVipKillForPlayer,
+    incrementKillForPlayer,
+    incrementDeathForPlayer,
+    getPlayerStats,
 } from './state.ts';
 import {
     selectInitialVIPs,
@@ -17,6 +21,8 @@ import {
     getTeamById,
 } from './vip-manager.ts';
 import { VIPFiestaScoreUI } from './score-ui.ts';
+import { addFriendlyVipWorldIcon } from './vip-manager.ts';
+import { getPlayerById } from './vip-manager.ts';
 
 export class VIPFiesta {
     private state: VIPFiestaState;
@@ -29,8 +35,8 @@ export class VIPFiesta {
 
     // Initialize the game mode - call from OnGameModeStarted
     public initialize(): void {
-        // Set time limit (20 minutes) - we handle scoring ourselves
-        mod.SetGameModeTimeLimit(CONFIG.TIME_LIMIT_SECONDS);
+        // Set time limit from config - we handle scoring ourselves
+        mod.SetGameModeTimeLimit(getConfig().timeLimitSeconds);
 
         // NOTE: We don't use SetGameModeTargetScore because we track scores ourselves
         // Portal's built-in score system may conflict with our custom scoring
@@ -43,6 +49,19 @@ export class VIPFiesta {
 
         // Announce game start to all players
         mod.DisplayNotificationMessage(mod.Message(mod.stringkeys.vipFiesta.notifications.gameStarting));
+
+        // Configure built-in scoreboard (CustomFFA)
+        mod.SetScoreboardType(mod.ScoreboardType.CustomFFA);
+        mod.SetScoreboardHeader(mod.Message(mod.stringkeys.vipFiesta.ui.scoreboardTitle));
+        mod.SetScoreboardColumnNames(
+            mod.Message(mod.stringkeys.vipFiesta.ui.scoreboardColTeam),
+            mod.Message(mod.stringkeys.vipFiesta.ui.scoreboardColVipKills),
+            mod.Message(mod.stringkeys.vipFiesta.ui.scoreboardColKills),
+            mod.Message(mod.stringkeys.vipFiesta.ui.scoreboardColDeaths)
+        );
+        mod.SetScoreboardColumnWidths(1.0, 1.0, 1.0, 1.0);
+        // Sort primarily by VIP Kills (column 2), then Kills (column 3)
+        mod.SetScoreboardSorting(2, true);
 
         // Wait for players to be assigned to teams, then detect active teams and select VIPs
         mod.Wait(5).then(() => {
@@ -94,6 +113,12 @@ export class VIPFiesta {
 
         // Notify all other players (less intrusive - use world log)
         mod.DisplayHighlightedWorldLogMessage(mod.Message(mod.stringkeys.vipFiesta.notifications.newVip, player));
+
+        // Add friendly world icon for the VIP visible to their team only
+        const team = mod.GetTeam(player);
+        const teamColor = mod.CreateVector(0.2, 0.8, 0.2);
+        const msg = mod.Message(mod.stringkeys.vipFiesta.ui.vipMarker);
+        addFriendlyVipWorldIcon(player, team, teamColor, msg);
     }
 
     // Handle player death - call from OnPlayerDied
@@ -109,6 +134,10 @@ export class VIPFiesta {
             return; // Not a VIP, nothing to do
         }
 
+        // Track deaths/kills for scoreboard
+        incrementDeathForPlayer(this.state, deadPlayer);
+        incrementKillForPlayer(this.state, killer);
+
         // VIP was killed!
         const killerTeam = mod.GetTeam(killer);
         const killerTeamId = mod.GetObjId(killerTeam);
@@ -117,8 +146,14 @@ export class VIPFiesta {
         removeVIPSpotting(deadPlayer);
 
         // Only award points if killed by different team (not suicide/team kill)
-        if (killerTeamId !== deadPlayerTeamId && killerTeamId >= 1 && killerTeamId <= CONFIG.TEAM_COUNT) {
+        if (killerTeamId !== deadPlayerTeamId && killerTeamId >= 1 && killerTeamId <= getConfig().teamCount) {
+            // Team point
             this.awardPoint(killerTeamId);
+            // Per-player VIP kill stat
+            incrementVipKillForPlayer(this.state, killer);
+            // Update scoreboard row for killer
+            const stats = getPlayerStats(this.state, killer);
+            mod.SetScoreboardPlayerValues(killer, killerTeamId, stats.vipKills, stats.kills, stats.deaths);
         }
 
         // Notify dead VIP's team (world log - less intrusive)
@@ -153,11 +188,16 @@ export class VIPFiesta {
 
         // Announce the score (world log - scrolling message)
         mod.DisplayHighlightedWorldLogMessage(
-            mod.Message(mod.stringkeys.vipFiesta.notifications.vipKilled, teamId, newScore)
+            mod.Message(
+                mod.stringkeys.vipFiesta.notifications.vipKilled,
+                teamId,
+                newScore,
+                getConfig().targetVipKills
+            )
         );
 
         // Check win condition
-        if (newScore >= CONFIG.WIN_SCORE) {
+        if (newScore >= getConfig().targetVipKills) {
             this.endGame(teamId);
         }
     }
@@ -203,7 +243,7 @@ export class VIPFiesta {
             this.state.teamVIPs.get(teamId) === null &&
             !this.state.vipCooldowns.has(teamId) &&
             teamId >= 1 &&
-            teamId <= CONFIG.TEAM_COUNT
+            teamId <= getConfig().teamCount
         ) {
             // Select this player as VIP
             const playerId = mod.GetObjId(player);
@@ -215,6 +255,81 @@ export class VIPFiesta {
         // If this player is the VIP, re-apply spotting
         if (isPlayerVIP(player, this.state)) {
             applyVIPSpotting(player);
+        }
+
+        // Update per-player HUD: show current team VIP or self-highlight
+        const playerTeam = mod.GetTeam(player);
+        const playerTeamId = mod.GetObjId(playerTeam);
+        const vipId = this.state.teamVIPs.get(playerTeamId);
+        const widgetName = `vipfiesta_hud_${mod.GetObjId(player)}`;
+        const existing = mod.FindUIWidgetWithName(widgetName);
+        const parent = mod.GetUIRoot();
+        const hudMessage = isPlayerVIP(player, this.state)
+            ? mod.Message(mod.stringkeys.vipFiesta.hud.youAreVipShort)
+            : (vipId ? mod.Message(mod.stringkeys.vipFiesta.hud.yourVip, getPlayerById(vipId) as mod.Player) : mod.Message(mod.stringkeys.vipFiesta.hud.yourVip, mod.stringkeys.vipFiesta.ui.vipMarker));
+
+        if (!existing) {
+            mod.AddUIText(
+                widgetName,
+                mod.CreateVector(10, 70, 0),
+                mod.CreateVector(300, 24, 0),
+                mod.UIAnchor.TopLeft,
+                parent,
+                true,
+                4,
+                mod.CreateVector(0, 0, 0),
+                0.4,
+                mod.UIBgFill.Blur,
+                hudMessage,
+                16,
+                mod.CreateVector(1, 1, 1),
+                1,
+                mod.UIAnchor.CenterLeft,
+                mod.UIDepth.AboveGameUI,
+                player
+            );
+        } else {
+            mod.SetUITextLabel(existing, hudMessage);
+            mod.SetUIWidgetVisible(existing, true);
+        }
+
+        // Initialize/update scoreboard row for this player
+        const stats = getPlayerStats(this.state, player);
+        mod.SetScoreboardPlayerValues(player, playerTeamId, stats.vipKills, stats.kills, stats.deaths);
+
+        // One-time introduction UI per player
+        const pid = mod.GetObjId(player);
+        if (!this.state.introShownForPlayerIds.has(pid)) {
+            const introName = `vipfiesta_intro_${pid}`;
+            const existingIntro = mod.FindUIWidgetWithName(introName);
+            const introMessage = mod.Message(mod.stringkeys.vipFiesta.notifications.gameStarting);
+            if (!existingIntro) {
+                mod.AddUIText(
+                    introName,
+                    mod.CreateVector(0, 120, 0),
+                    mod.CreateVector(520, 26, 0),
+                    mod.UIAnchor.TopCenter,
+                    mod.GetUIRoot(),
+                    true,
+                    6,
+                    mod.CreateVector(0, 0, 0),
+                    0.5,
+                    mod.UIBgFill.Blur,
+                    introMessage,
+                    18,
+                    mod.CreateVector(1, 1, 1),
+                    1,
+                    mod.UIAnchor.Center,
+                    mod.UIDepth.AboveGameUI,
+                    player
+                );
+            }
+            // Hide after 3 seconds and mark as shown
+            mod.Wait(3).then(() => {
+                const w = mod.FindUIWidgetWithName(introName);
+                if (w) mod.SetUIWidgetVisible(w, false);
+                this.state.introShownForPlayerIds.add(pid);
+            });
         }
     }
 

@@ -1,5 +1,5 @@
 import { getPlayersInTeam } from '../modlib/index.ts';
-import { CONFIG } from './state.ts';
+import { getConfig } from './state.ts';
 import type { VIPFiestaState } from './state.ts';
 
 // Get team by ID - uses mod.GetTeam(teamId) directly
@@ -43,8 +43,6 @@ export function selectRandomVIP(teamId: number, state: VIPFiestaState): mod.Play
 
 // Apply VIP spotting marker - makes VIP visible to all players
 export function applyVIPSpotting(player: mod.Player): void {
-    // Spot the VIP for all players with a 10 second duration
-    // This will be refreshed every tick in OngoingPlayer
     mod.SpotTarget(player, 10, mod.SpotStatus.SpotInBoth);
 }
 
@@ -77,7 +75,7 @@ export async function handleVIPDeath(
     state.teamVIPs.set(teamId, null);
 
     // Wait for respawn delay
-    await mod.Wait(CONFIG.VIP_RESPAWN_DELAY_SECONDS);
+    await mod.Wait(getConfig().vipRespawnDelaySeconds);
 
     // Remove from cooldown
     state.vipCooldowns.delete(teamId);
@@ -122,13 +120,31 @@ export function isPlayerVIP(player: mod.Player, state: VIPFiestaState): boolean 
     return state.teamVIPs.get(teamId) === playerId;
 }
 
-// Maintain VIP spotting (call this in OngoingPlayer)
-export function maintainVIPSpotting(player: mod.Player, state: VIPFiestaState): void {
-    // Only spot if player is deployed and is VIP
-    if (!isPlayerDeployed(player)) return;
+// Maintain VIP spotting (call this in OngoingPlayer) with throttling
+const lastSpotAtByPlayer = new Map<number, number>();
 
-    if (isPlayerVIP(player, state)) {
-        // Refresh spotting to keep VIP visible
+export function maintainVIPSpotting(player: mod.Player, state: VIPFiestaState): void {
+    if (!isPlayerDeployed(player)) return;
+    if (!isPlayerVIP(player, state)) return;
+
+    const playerId = mod.GetObjId(player);
+    const now = mod.GetMatchTimeElapsed();
+    const period = 1 / Math.max(0.1, getConfig().spottingRefreshHz); // seconds per refresh
+    const last = lastSpotAtByPlayer.get(playerId) ?? -Infinity;
+
+    if (now - last >= period) {
         mod.SpotTarget(player, 10, mod.SpotStatus.SpotInBoth);
+        lastSpotAtByPlayer.set(playerId, now);
     }
+}
+
+// Friendly world icon creation (attached to VIP) - visible to own team
+export function addFriendlyVipWorldIcon(player: mod.Player, team: mod.Team, color: mod.Vector, text: mod.Message): void {
+    // Attach a crown icon above the VIP, visible to their team only
+    // Vertical offset ~2.0 meters above head; adjust if needed
+    mod.AddUIIcon(player as unknown as mod.Object, mod.WorldIconImages.Skull, 2.0, color, text, team);
+}
+
+export function removeVipWorldIcon(player: mod.Player): void {
+    mod.RemoveUIIcon(player as unknown as mod.Object);
 }

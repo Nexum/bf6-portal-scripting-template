@@ -1,11 +1,31 @@
-// Game configuration constants
-export const CONFIG = {
-    WIN_SCORE: 20,
-    TIME_LIMIT_SECONDS: 1200, // 20 minutes
-    VIP_RESPAWN_DELAY_SECONDS: 3,
-    TEAM_COUNT: 100,
-    PLAYERS_PER_TEAM: 4,
-} as const;
+// Game configuration
+export interface GameConfig {
+    targetVipKills: number;
+    timeLimitSeconds: number;
+    vipRespawnDelaySeconds: number;
+    teamCount: number;
+    playersPerTeam: number;
+    spottingRefreshHz: number; // desired SpotTarget refresh rate (times per second)
+}
+
+const defaultConfig: GameConfig = {
+    targetVipKills: 20,
+    timeLimitSeconds: 1200,
+    vipRespawnDelaySeconds: 5,
+    teamCount: 100,
+    playersPerTeam: 4,
+    spottingRefreshHz: 1,
+};
+
+let CONFIG: GameConfig = { ...defaultConfig };
+
+export function getConfig(): GameConfig {
+    return CONFIG;
+}
+
+export function setConfig(partial: Partial<GameConfig>): void {
+    CONFIG = { ...CONFIG, ...partial };
+}
 
 // Game state interface
 export interface VIPFiestaState {
@@ -24,6 +44,14 @@ export interface VIPFiestaState {
     // Game status
     gameStarted: boolean;
     gameEnded: boolean;
+
+    // Per-player stats for scoreboard
+    vipKillsByPlayer: Map<number, number>;
+    killsByPlayer: Map<number, number>;
+    deathsByPlayer: Map<number, number>;
+
+    // Per-player intro shown tracking
+    introShownForPlayerIds: Set<number>;
 }
 
 // Create initial state with all teams initialized
@@ -35,10 +63,14 @@ export function createInitialState(): VIPFiestaState {
         activeTeamIds: [],
         gameStarted: false,
         gameEnded: false,
+        vipKillsByPlayer: new Map(),
+        killsByPlayer: new Map(),
+        deathsByPlayer: new Map(),
+        introShownForPlayerIds: new Set(),
     };
 
     // Initialize all teams with 0 score and no VIP
-    for (let teamId = 1; teamId <= CONFIG.TEAM_COUNT; teamId++) {
+    for (let teamId = 1; teamId <= CONFIG.teamCount; teamId++) {
         state.teamScores.set(teamId, 0);
         state.teamVIPs.set(teamId, null);
     }
@@ -57,13 +89,41 @@ export function calculateActiveTeamIds(): number[] {
         const team = mod.GetTeam(player);
         const teamId = mod.GetObjId(team);
 
-        if (teamId >= 1 && teamId <= CONFIG.TEAM_COUNT) {
+        if (teamId >= 1 && teamId <= CONFIG.teamCount) {
             activeTeams.add(teamId);
         }
     }
 
     // Return sorted array for consistent UI ordering
     return Array.from(activeTeams).sort((a, b) => a - b);
+}
+
+// Player stats helpers
+export function incrementVipKillForPlayer(state: VIPFiestaState, player: mod.Player): void {
+    const playerId = mod.GetObjId(player);
+    const cur = state.vipKillsByPlayer.get(playerId) ?? 0;
+    state.vipKillsByPlayer.set(playerId, cur + 1);
+}
+
+export function incrementKillForPlayer(state: VIPFiestaState, player: mod.Player): void {
+    const playerId = mod.GetObjId(player);
+    const cur = state.killsByPlayer.get(playerId) ?? 0;
+    state.killsByPlayer.set(playerId, cur + 1);
+}
+
+export function incrementDeathForPlayer(state: VIPFiestaState, player: mod.Player): void {
+    const playerId = mod.GetObjId(player);
+    const cur = state.deathsByPlayer.get(playerId) ?? 0;
+    state.deathsByPlayer.set(playerId, cur + 1);
+}
+
+export function getPlayerStats(state: VIPFiestaState, player: mod.Player): { vipKills: number; kills: number; deaths: number } {
+    const playerId = mod.GetObjId(player);
+    return {
+        vipKills: state.vipKillsByPlayer.get(playerId) ?? 0,
+        kills: state.killsByPlayer.get(playerId) ?? 0,
+        deaths: state.deathsByPlayer.get(playerId) ?? 0,
+    };
 }
 
 // Check if two arrays of team IDs are different
