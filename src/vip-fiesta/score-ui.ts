@@ -103,7 +103,7 @@ export class VIPFiestaScoreUI {
                 0.0
             );
 
-            // Fill bar
+            // Fill bar (use background color as the bar fill)
             mod.AddUIImage(
                 BAR_FILL_PREFIX + teamId,
                 mod.CreateVector(0, 0, 0),
@@ -112,12 +112,12 @@ export class VIPFiestaScoreUI {
                 container,
                 false,
                 0,
-                mod.CreateVector(0, 0, 0),
-                0.0,
-                mod.UIBgFill.None,
-                mod.UIImageType.None,
                 teamColor,
-                1.0
+                0.9,
+                mod.UIBgFill.Solid,
+                mod.UIImageType.None,
+                mod.CreateVector(0, 0, 0),
+                0.0
             );
 
             // Label
@@ -267,8 +267,8 @@ export class VIPFiestaScoreUI {
         const fill = mod.FindUIWidgetWithName(BAR_FILL_PREFIX + teamId);
         if (fill) {
             const teamColor = TEAM_COLORS[teamId - 1] ?? mod.CreateVector(1, 1, 1);
-            // brighten by raising alpha via label/background
-            mod.SetUIImageColor(fill, teamColor);
+            mod.SetUIWidgetBgColor(fill, teamColor);
+            mod.SetUIWidgetBgAlpha(fill, 1.0);
         }
     }
 

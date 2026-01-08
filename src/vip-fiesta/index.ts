@@ -23,6 +23,7 @@ import {
 import { VIPFiestaScoreUI } from './score-ui.ts';
 import { addFriendlyVipWorldIcon } from './vip-manager.ts';
 import { getPlayerById } from './vip-manager.ts';
+import { getPlayersInTeam } from '../modlib/index.ts';
 
 export class VIPFiesta {
     private state: VIPFiestaState;
@@ -119,6 +120,9 @@ export class VIPFiesta {
         const teamColor = mod.CreateVector(0.2, 0.8, 0.2);
         const msg = mod.Message(mod.stringkeys.vipFiesta.ui.vipMarker);
         addFriendlyVipWorldIcon(player, team, teamColor, msg);
+
+        // Refresh HUD for all teammates to reflect new VIP
+        this.refreshTeamHud(team);
     }
 
     // Handle player death - call from OnPlayerDied
@@ -258,43 +262,12 @@ export class VIPFiesta {
         }
 
         // Update per-player HUD: show current team VIP or self-highlight
-        const playerTeam = mod.GetTeam(player);
-        const playerTeamId = mod.GetObjId(playerTeam);
-        const vipId = this.state.teamVIPs.get(playerTeamId);
-        const widgetName = `vipfiesta_hud_${mod.GetObjId(player)}`;
-        const existing = mod.FindUIWidgetWithName(widgetName);
-        const parent = mod.GetUIRoot();
-        const hudMessage = isPlayerVIP(player, this.state)
-            ? mod.Message(mod.stringkeys.vipFiesta.hud.youAreVipShort)
-            : (vipId ? mod.Message(mod.stringkeys.vipFiesta.hud.yourVip, getPlayerById(vipId) as mod.Player) : mod.Message(mod.stringkeys.vipFiesta.hud.yourVip, mod.stringkeys.vipFiesta.ui.vipMarker));
-
-        if (!existing) {
-            mod.AddUIText(
-                widgetName,
-                mod.CreateVector(10, 70, 0),
-                mod.CreateVector(300, 24, 0),
-                mod.UIAnchor.TopLeft,
-                parent,
-                true,
-                4,
-                mod.CreateVector(0, 0, 0),
-                0.4,
-                mod.UIBgFill.Blur,
-                hudMessage,
-                16,
-                mod.CreateVector(1, 1, 1),
-                1,
-                mod.UIAnchor.CenterLeft,
-                mod.UIDepth.AboveGameUI,
-                player
-            );
-        } else {
-            mod.SetUITextLabel(existing, hudMessage);
-            mod.SetUIWidgetVisible(existing, true);
-        }
+        this.updatePlayerHud(player);
 
         // Initialize/update scoreboard row for this player
         const stats = getPlayerStats(this.state, player);
+        const playerTeamForScore = mod.GetTeam(player);
+        const playerTeamId = mod.GetObjId(playerTeamForScore);
         mod.SetScoreboardPlayerValues(player, playerTeamId, stats.vipKills, stats.kills, stats.deaths);
 
         // One-time introduction UI per player
@@ -353,6 +326,10 @@ export class VIPFiesta {
                 // This team's VIP left - select new one
                 this.state.teamVIPs.set(teamId, null);
 
+                // Refresh HUD for team with no VIP
+                const teamObj = getTeamById(teamId);
+                if (teamObj) this.refreshTeamHud(teamObj);
+
                 // Select new VIP immediately (no cooldown for leaving)
                 const newVIP = selectRandomVIP(teamId, this.state);
                 if (newVIP) {
@@ -360,6 +337,10 @@ export class VIPFiesta {
                     this.state.teamVIPs.set(teamId, newVipId);
                     applyVIPSpotting(newVIP);
                     this.announceNewVIP(newVIP, teamId);
+
+                    // Refresh HUD for team with new VIP
+                    const refreshedTeam = mod.GetTeam(newVIP);
+                    this.refreshTeamHud(refreshedTeam);
                 }
             }
         }
@@ -391,12 +372,23 @@ export class VIPFiesta {
                     this.state.teamVIPs.set(teamId, newVipId);
                     applyVIPSpotting(newVIP);
                     this.announceNewVIP(newVIP, teamId);
+
+                    // Refresh HUD for old team after assigning new VIP
+                    const oldTeamObj = getTeamById(teamId);
+                    if (oldTeamObj) this.refreshTeamHud(oldTeamObj);
                 }
             }
         }
 
         // Refresh active teams after team switch
         this.refreshActiveTeams();
+
+        // Update scoreboard row for switching player to new team
+        const stats = getPlayerStats(this.state, player);
+        mod.SetScoreboardPlayerValues(player, newTeamId, stats.vipKills, stats.kills, stats.deaths);
+
+        // Refresh HUD for the player's new team
+        this.refreshTeamHud(newTeam);
     }
 
     // Maintain VIP spotting - call from OngoingPlayer (30x/sec)
@@ -410,5 +402,65 @@ export class VIPFiesta {
     // Get current state (for debugging)
     public getState(): VIPFiestaState {
         return this.state;
+    }
+
+    // Update HUD for a single player to reflect VIP status and current team VIP
+    private updatePlayerHud(player: mod.Player): void {
+        const playerTeam = mod.GetTeam(player);
+        const playerTeamId = mod.GetObjId(playerTeam);
+        const vipId = this.state.teamVIPs.get(playerTeamId);
+        const widgetName = `vipfiesta_hud_${mod.GetObjId(player)}`;
+        const existing = mod.FindUIWidgetWithName(widgetName);
+        const parent = mod.GetUIRoot();
+        const isVipNow = isPlayerVIP(player, this.state);
+        const hudMessage = isVipNow
+            ? mod.Message(mod.stringkeys.vipFiesta.hud.youAreVipShort)
+            : (vipId
+                ? mod.Message(mod.stringkeys.vipFiesta.hud.yourVip, getPlayerById(vipId) as mod.Player)
+                : mod.Message(mod.stringkeys.vipFiesta.hud.yourVip, mod.stringkeys.vipFiesta.ui.vipMarker));
+
+        const vipTextColor = mod.CreateVector(1.0, 0.84, 0.0);
+        const friendlyTextColor = mod.CreateVector(0.2, 0.9, 0.2);
+        const textSize = isVipNow ? 24 : 18;
+        const bgAlpha = isVipNow ? 0.6 : 0.4;
+        const bgFill = isVipNow ? mod.UIBgFill.OutlineThick : mod.UIBgFill.Blur;
+
+        if (!existing) {
+            mod.AddUIText(
+                widgetName,
+                mod.CreateVector(10, 70, 0),
+                mod.CreateVector(360, 30, 0),
+                mod.UIAnchor.TopLeft,
+                parent,
+                true,
+                4,
+                mod.CreateVector(0, 0, 0),
+                bgAlpha,
+                bgFill,
+                hudMessage,
+                textSize,
+                isVipNow ? vipTextColor : friendlyTextColor,
+                1,
+                mod.UIAnchor.CenterLeft,
+                mod.UIDepth.AboveGameUI,
+                player
+            );
+        } else {
+            mod.SetUITextLabel(existing, hudMessage);
+            mod.SetUITextSize(existing, textSize);
+            mod.SetUITextColor(existing, isVipNow ? vipTextColor : friendlyTextColor);
+            mod.SetUIWidgetBgAlpha(existing, bgAlpha);
+            mod.SetUIWidgetBgFill(existing, bgFill);
+            mod.SetUIWidgetVisible(existing, true);
+        }
+    }
+
+    // Refresh HUD for all players on a team
+    private refreshTeamHud(team: mod.Team): void {
+        const teammates = getPlayersInTeam(team);
+        for (let i = 0; i < teammates.length; i++) {
+            const p = teammates[i];
+            this.updatePlayerHud(p);
+        }
     }
 }
